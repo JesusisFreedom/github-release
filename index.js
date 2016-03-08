@@ -95,7 +95,7 @@ module.exports = function (pkg, token) {
     if (token === undefined) fn(new Error('Missing Github Token'));
     debug(`Github Token ${token}`);
     var tag = 'v' + pkg.version,
-      dest = `${file.basename}`,
+      dest = `${tag}-${file.basename}`,
       src = file.path;
     debug(file);
     debug(src);
