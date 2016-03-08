@@ -84,7 +84,7 @@ module.exports = function(pkg){
     if(!pkg.repository || !pkg.repository.url){
       return fn(new Error('Missing `repository.url` in package.json'));
     }
-    var repo = /git:\/\/github.com\/([\w\/\-]+)\.git/.exec(pkg.repository.url)[1],
+    var repo = /.*github.com\/([\w\.\/\-]+)\.git/.exec(pkg.repository.url)[1],
       token = process.env.GITHUB_TOKEN,
       tag = 'v' + pkg.version,
       dest = pkg.name + '_' + os.platform() + '_' +
