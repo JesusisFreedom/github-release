@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-
+'use strict';
 var request = require('request'),
   fs = require('fs'),
   os = require('os'),
@@ -9,39 +9,42 @@ var request = require('request'),
   debug = require('debug')('github-release');
 
 
-function upload(token, repo, tag, src, dest, fn){
+function upload(token, repo, tag, src, dest, fn) {
   debug('fetching current releases for', repo);
-  getReleases(token, repo, function(err, releases){
-    if(err) return fn(err);
-    var release = releases.filter(function(r){return r.tag_name === tag;})[0];
-    if(release) return postDist(token, src, dest, release, fn);
+  getReleases(token, repo, function (err, releases) {
+    if (err) return fn(err);
+    var release = releases.filter(function (r) {
+      return r.tag_name === tag;
+    })[0];
+    if (release) return postDist(token, src, dest, release, fn);
 
-    createRelease(token, repo, tag, '> @todo', function(err, release){
-      if(err) return fn(err);
+    createRelease(token, repo, tag, '> @todo', function (err, release) {
+      if (err) return fn(err);
       postDist(token, src, dest, release, fn);
     });
   });
 }
 
-function postDist(token, src, dest, release, fn){
-  debug('uploading %s to release %j', dest, release);
-  fs.readFile(src, function(err, buf){
+function postDist(token, src, dest, release, fn) {
+  debug('uploading %s to release %j', dest, release.tag_name);
+  debug(release.upload_url);
+  fs.readFile(src, function (err, buf) {
     var opts = {
-        url: release.upload_url.replace('{?name}', ''),
-        body: buf,
-        qs: {name: dest, access_token: token},
-        headers: {
-          'Content-Type': mime.lookup(dest)
-        }
-      };
+      url: release.upload_url.replace('{?name,label}', ''),
+      body: buf,
+      qs: {name: dest, label: 'btvplayer', access_token: token},
+      headers: {
+        'Content-Type': mime.lookup(dest)
+      }
+    };
 
-    request.post(opts, function(err, res, body){
-      if(err) return fn(err);
+    request.post(opts, function (err, res, body) {
+      if (err) return fn(err);
       var asset = JSON.parse(body);
 
-      if(asset.errors){
+      if (asset.errors) {
         err = asset.errors[0];
-        return fn(new Error(err.resource + ': ' + err.code + ' (invalid '+err.field+')'));
+        return fn(new Error(err.resource + ': ' + err.code + ' (invalid ' + err.field + ')'));
       }
       release.asset = asset;
 
@@ -50,10 +53,10 @@ function postDist(token, src, dest, release, fn){
   });
 }
 
-function createRelease(token, repo, tag, body, fn){
+function createRelease(token, repo, tag, body, fn) {
   var data = {
     tag_name: tag,
-    draft: true,
+    draft: false,
     name: tag,
     body: body
   };
@@ -62,40 +65,45 @@ function createRelease(token, repo, tag, body, fn){
   request.post(url, {
     qs: {access_token: token},
     body: JSON.stringify(data),
-    headers: {'User-Agent': '@imlucas/github-release uploader'}
-  }, function(err, res, body){
-    if(err) return fn(err);
+    headers: {'User-Agent': 'Your mama'}
+  }, function (err, res, body) {
+    if (err) return fn(err);
     fn(null, JSON.parse(body));
   });
 }
 
-function getReleases(token, repo, fn){
+function getReleases(token, repo, fn) {
   var url = 'https://api.github.com/repos/' + repo + '/releases';
-  request.get(url, {qs: {access_token: token}, headers: {
-    'User-Agent': '@imlucas/github-release uploader'
-  }}, function(err, res, body){
-    if(err) return fn(err);
+  request.get(url, {
+    qs: {access_token: token}, headers: {
+      'User-Agent': 'Your mama'
+    }
+  }, function (err, res, body) {
+    if (err) return fn(err);
     fn(null, JSON.parse(body));
   });
 }
 
-module.exports = function(pkg){
-  return through.obj(function(file, enc, fn){
-    if(!pkg.repository || !pkg.repository.url){
+module.exports = function (pkg, token) {
+  return through.obj(function (file, enc, fn) {
+    if (!pkg.repository || !pkg.repository.url) {
       return fn(new Error('Missing `repository.url` in package.json'));
     }
-    var repo = /.*github.com\/([\w\.\/\-]+)\.git/.exec(pkg.repository.url)[1],
-      token = process.env.GITHUB_TOKEN,
-      tag = 'v' + pkg.version,
-      dest = pkg.name + '_' + os.platform() + '_' +
-        os.arch() + ((os.platform() === 'win32') ? '.exe' : ''),
+    var repo = /.*github.com\/([\w\.\/\-]+)\.git/.exec(pkg.repository.url)[1];
+    debug(`Repo short url ${repo}`);
+    var token = token || process.env.GITHUB_TOKEN;
+    if (token === undefined) fn(new Error('Missing Github Token'));
+    debug(`Github Token ${token}`);
+    var tag = 'v' + pkg.version,
+      dest = `${file.basename}`,
       src = file.path;
+    debug(file);
+    debug(src);
 
     debug('uploading ' + pkg.name + '@' + pkg.version + ' ' + dest);
-    upload(token, repo, tag, src, dest, function(err, release){
-      if(err) return fn(err);
-
-      debug('uploaded asset successfully %j', release.asset);
+    upload(token, repo, tag, src, dest, function (err, release) {
+      if (err) return fn(err);
+      debug('uploaded asset successfully %j', release.asset.url);
       file.github = {
         release: release,
         src: src,
